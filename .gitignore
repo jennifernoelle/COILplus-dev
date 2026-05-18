@@ -1,0 +1,19 @@
+# RStudio and R session files
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Output and log files
+*.out
+*.Rout
+*.sh
+*.log
+
+# Processed data and results
+Results/
+ProcessedData/
+
+# Non-anonymized readme
+README_not_anonymous.md
