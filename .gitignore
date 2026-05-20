@@ -14,6 +14,20 @@
 # Processed data and results
 Results/
 ProcessedData/
+inst/extdata/processed/
 
 # Non-anonymized readme
 README_not_anonymous.md
+.positai
+
+# R package build artifacts
+*.Rcheck/
+*.tar.gz
+/doc/
+/Meta/
+
+inst/doc
+
+# Vignette build artifacts
+vignettes/*.R
+vignettes/*.html

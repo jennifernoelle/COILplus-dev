@@ -1,0 +1,157 @@
+---
+title: "Analysing results"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Analysing results}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+
+This vignette analyses in-sample and out-of-sample model performance for a
+fitted model. Run `vignette("02_fit_coilplus")` and
+`vignette("04_cross_validation")` first.
+
+```{r packages}
+library(COILplus)
+library(ggplot2)
+library(RColorBrewer)
+library(gplots)
+library(superheat)
+library(abind)
+library(gridExtra)
+library(grid)
+library(dplyr)
+library(caret)
+library(pROC)
+library(bayesplot)
+library(tidyverse)
+
+data_path    <- file.path(system.file("extdata", package = "COILplus"), "processed")
+date         <- "COILp_exp"
+results_path <- file.path(tempdir(), "COILplus_results", date)
+cv_path      <- file.path(tempdir(), "COILplus_results", paste0(date, "_cv"))
+```
+
+```{r load}
+load(file.path(data_path, "A_obs.dat"))
+load(file.path(data_path, "F_obs.dat"))
+load(file.path(data_path, "Obs_X_sorted.dat"))
+load(file.path(data_path, "Obs_W_sorted.dat"))
+load(file.path(data_path, "OP_full.dat"))
+load(file.path(data_path, "OV_full.dat"))
+
+v.taxa <- read.csv(file.path(data_path, "v_taxa_sorted.csv"))
+p.taxa <- read.csv(file.path(data_path, "p_taxa_sorted.csv"))
+
+loadRData <- function(fileName) {
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+
+nchains <- 4
+all_pred <- vector("list", nchains)
+for (ii in 1:nchains) {
+  res <- loadRData(file.path(results_path, paste0("res_", date, "_", ii, ".dat")))
+  all_pred[[ii]] <- res$all_pred
+}
+```
+
+```{r combine}
+# Combine posterior samples across chains
+mod_pL1s <- do.call(abind::abind, c(lapply(all_pred, function(x) x[, , , 2]), along = 1))
+pred_Ls  <- do.call(abind::abind, c(lapply(all_pred, function(x) x[, , , 1]), along = 1))
+
+# Posterior mean interaction probability
+mean_prob <- apply(mod_pL1s, c(2, 3), mean)
+```
+
+```{r in-sample}
+# In-sample performance: posterior predicted vs. observed
+comb_A <- (apply(obs_A, c(1, 2), sum) > 0) * 1
+obs_vec  <- as.vector(comb_A)
+pred_vec <- as.vector(mean_prob)
+
+roc_obj <- pROC::roc(obs_vec, pred_vec)
+cat("In-sample AUC:", pROC::auc(roc_obj), "\n")
+```
+
+```{r heatmap}
+# Set observed interactions to NA so they appear black in the plot
+mean_pred_na <- mean_prob
+mean_pred_na[comb_A == 1] <- NA
+
+v_group <- v.taxa$Animal_Family_Generic
+p_group <- p.taxa$Plant_Family_Generic
+
+v_size_cluster <- sapply(unique(v_group), function(x) sum(v_group == x))
+p_size_cluster <- sapply(unique(p_group), function(x) sum(p_group == x))
+
+min_v_size <- 10
+min_p_size <- 25
+
+keep_v_groups <- names(which(v_size_cluster >= min_v_size))
+keep_p_groups <- names(which(p_size_cluster >= min_p_size))
+
+keep_v_index <- which(v_group %in% keep_v_groups)
+keep_p_index <- which(p_group %in% keep_p_groups)
+
+superheat(X = mean_pred_na[keep_v_index, keep_p_index],
+          membership.rows = v_group[keep_v_index],
+          membership.cols = p_group[keep_p_index],
+          grid.hline.col = "#00257D", grid.vline.col = '#00257D',
+          grid.hline.size = 0.3, grid.vline.size = 0.3,
+          bottom.label.text.angle = 90,
+          left.label.text.size = 3,
+          bottom.label.text.size = 3,
+          bottom.label.size = 0.2, left.label.size = 0.12,
+          heat.col.scheme = "grey", heat.na.col = 'black',
+          heat.pal.values = seq(0, 1, by = 0.05),
+          title.size = 20)
+```
+
+```{r out-of-sample}
+# Match n.folds and n.chains used in 04_cross_validation
+n.folds  <- 2   # Recommended: 10
+n.chains <- 4
+
+fold_stats <- lapply(1:n.folds, function(kk) {
+  chain_preds <- lapply(1:n.chains, function(cc) {
+    res <- loadRData(file.path(cv_path, paste0("cv_fold", kk, "_chain", cc, ".dat")))
+    list(all_pred = res$all_pred, held_out = res$held_out)
+  })
+  held_out <- chain_preds[[1]]$held_out
+
+  combined  <- do.call(abind::abind, c(lapply(chain_preds, function(x) x$all_pred[, , , 2]), along = 1))
+  fold_mean <- apply(combined, c(2, 3), mean)
+
+  held_preds <- fold_mean[held_out]
+  list(
+    pred_mean      = mean(held_preds),
+    pred_median    = median(held_preds),
+    overall_mean   = mean(fold_mean),
+    overall_median = median(fold_mean)
+  )
+})
+
+plot_dta <- data.frame(
+  value = c(
+    sapply(fold_stats, function(x) x$pred_mean   / x$overall_mean),
+    sapply(fold_stats, function(x) x$pred_median / x$overall_median)
+  ),
+  stat = rep(c('Pred:Overall (mean)', 'Pred:Overall (median)'), each = n.folds)
+)
+
+ggplot(data = plot_dta) +
+  geom_boxplot(aes(x = stat, y = value)) +
+  theme_bw() +
+  ylab('') +
+  xlab('') +
+  ggtitle('Out of sample performance', subtitle = date) +
+  theme(legend.position = 'none') +
+  scale_y_continuous(limits = function(x) c(0.9, x[2]), n.breaks = 6) +
+  theme(text = element_text(size = 20))
+```

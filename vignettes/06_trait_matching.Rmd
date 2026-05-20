@@ -1,0 +1,131 @@
+---
+title: "Trait matching"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Trait matching}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+
+This vignette estimates trait importance and direction (signed correlation)
+for species interactions using permutation tests. Run
+`vignette("02_fit_coilplus")` first.
+
+A small permutation count is used here for speed. For a full analysis,
+increase `B` to 1000 or more.
+
+```{r packages}
+library(COILplus)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+
+data_path    <- file.path(system.file("extdata", package = "COILplus"), "processed")
+date         <- "COILp_exp"
+results_path <- file.path(tempdir(), "COILplus_results", date)
+save_path    <- results_path
+```
+
+```{r load}
+load(file.path(data_path, "A_obs.dat"))
+load(file.path(data_path, "Obs_X_sorted.dat"))
+load(file.path(data_path, "Obs_W_sorted.dat"))
+
+loadRData <- function(fileName) {
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+
+any_X_miss <- any(apply(obs_X, 2, function(x) sum(is.na(x))) > 0)
+any_W_miss <- any(apply(obs_W, 2, function(x) sum(is.na(x))) > 0)
+
+nchains  <- 4
+all_pred <- vector("list", nchains)
+all_X    <- vector("list", nchains)
+all_W    <- vector("list", nchains)
+
+for (ii in 1:nchains) {
+  res <- loadRData(file.path(results_path, paste0("res_", date, "_", ii, ".dat")))
+  all_pred[[ii]] <- res$all_pred
+  if (any_X_miss) all_X[[ii]] <- res$Xs
+  if (any_W_miss) all_W[[ii]] <- res$Ws
+}
+```
+
+```{r combine}
+library(abind)
+mod_pL1s <- do.call(abind::abind, c(lapply(all_pred, function(x) x[, , , 2]), along = 1))
+
+# Pool imputed covariates across chains
+pool_imputed <- function(chain_list, ncov) {
+  lapply(seq_len(ncov), function(mm) {
+    do.call(rbind, lapply(chain_list, function(ch) ch[[mm]]))
+  })
+}
+
+Nsims <- dim(mod_pL1s)[1]
+pV <- if (any_X_miss) length(all_X[[1]]) else ncol(obs_X)
+pP <- if (any_W_miss) length(all_W[[1]]) else ncol(obs_W)
+
+Xs_pooled <- if (any_X_miss) pool_imputed(all_X, pV) else
+  lapply(seq_len(pV), function(mm) matrix(NA, Nsims, 0))
+Ws_pooled <- if (any_W_miss) pool_imputed(all_W, pP) else
+  lapply(seq_len(pP), function(mm) matrix(NA, Nsims, 0))
+```
+
+## Run trait matching
+
+Set `ncores > 1` to parallelise over posterior samples (recommended for large
+datasets).
+
+```{r trait-match}
+# Sequential (ncores = 1) or parallel (ncores > 1)
+ncores <- 1
+
+trait_match <- TraitMatching(
+  B          = 500,
+  mod_pL1s   = mod_pL1s,
+  Xs         = Xs_pooled,
+  Ws         = Ws_pooled,
+  obs_X      = obs_X,
+  obs_W      = obs_W,
+  obs_only   = FALSE,
+  ncores     = ncores
+)
+
+save(trait_match, file = file.path(save_path, paste0("trait_match_", date, ".dat")))
+```
+
+## Compute p-values
+
+```{r pvalues}
+load(file.path(save_path, paste0("trait_match_", date, ".dat")))
+
+# Proportion of permutation R-squared exceeding observed
+pval_X <- sapply(seq_len(ncol(obs_X)), function(mm) {
+  mean(trait_match$rsq_resampling_X[, mm] >= trait_match$rsq_obs_X[mm])
+})
+pval_W <- sapply(seq_len(ncol(obs_W)), function(mm) {
+  mean(trait_match$rsq_resampling_W[, mm] >= trait_match$rsq_obs_W[mm])
+})
+
+results_df <- data.frame(
+  covariate  = c(colnames(obs_X), colnames(obs_W)),
+  species    = c(rep("Vertebrate", ncol(obs_X)), rep("Plant", ncol(obs_W))),
+  rsq        = c(trait_match$rsq_obs_X, trait_match$rsq_obs_W),
+  pvalue     = c(pval_X, pval_W)
+)
+print(results_df)
+```
+
+## Plot signed correlations
+
+```{r plot}
+# See Analysis_4b_trait_matching_plot.R for full plotting code
+# Signed direction: trait_match$corr_obs_X (vertebrate covariates x plant species)
+#                   trait_match$corr_obs_W (plant covariates x vertebrate species)
+```

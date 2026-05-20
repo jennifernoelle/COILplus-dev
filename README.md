@@ -62,7 +62,7 @@ For replicating the analysis results in this code, you will need to specify a di
 
 ## Citation
 
-If you use this repository, please cite both XX (2025) and Papdogeourgiou et al. (2023).
+If you use this repository, please cite both Kampe et. al. (2026) and Papdogeourgiou et al. (2023).
 
 # References
 

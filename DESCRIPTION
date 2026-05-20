@@ -1,0 +1,39 @@
+Package: COILplus
+Type: Package
+Title: Covariate-Informed Latent Interaction Models for Bipartite Networks
+Version: 0.1.0
+Authors@R: person("Jennifer", "Kampe", email = "jenniferkampe@gmail.com",
+    role = c("aut", "cre"))
+Description: Implements the COIL and COIL+ models for predicting unobserved
+    interactions in bipartite ecological networks using species trait
+    information, phylogenetic correlations, and informative occurrence priors.
+    COIL+ extends the original BiasedNetwork implementation (Papadogeorgou
+    et al., 2023) with blocked sampling of occurrence probabilities and major
+    efficiency improvements. Includes support for parallel trait-matching
+    analysis via permutation tests.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    Rcpp,
+    BayesLogit,
+    mvnfast,
+    mvtnorm,
+    truncnorm,
+    foreach,
+    doParallel
+LinkingTo: Rcpp
+Suggests:
+    ggplot2,
+    gplots,
+    gridExtra,
+    bayesplot,
+    pROC,
+    caret,
+    dplyr,
+    tidyverse,
+    RColorBrewer,
+    superheat,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3

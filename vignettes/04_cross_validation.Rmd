@@ -1,0 +1,106 @@
+---
+title: "Cross-validation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cross-validation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+
+This vignette performs k-fold cross-validation for the COIL+ model. Run
+`vignette("01_data_prep")` first. Cross-validation for COIL without sampling occurrence probabilities will follow the same structure with the
+`sampling` list adjusted accordingly (see `vignette("03_fit_coil")`).
+
+A small iteration count is used here for speed. Recommended settings for a
+full analysis (Nsims = 500, burn = 10000, thin = 20) are noted in the code
+comments. Similarly, k = 10 is recommended, however we use a smaller number of folds for this vignette. 
+
+```{r paths}
+library(COILplus)
+library(abind)
+
+data_path <- file.path(system.file("extdata", package = "COILplus"), "processed")
+date      <- "COILp_exp_cv"
+save_path <- file.path(tempdir(), "COILplus_results", date)
+dir.create(save_path, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r load}
+load(file.path(data_path, "Cu_phylo_sorted.dat"))
+load(file.path(data_path, "Cv_phylo_sorted.dat"))
+load(file.path(data_path, "A_obs.dat"))
+load(file.path(data_path, "F_obs.dat"))
+load(file.path(data_path, "Obs_X_sorted.dat"))
+load(file.path(data_path, "Obs_W_sorted.dat"))
+load(file.path(data_path, "OP_full.dat"))
+load(file.path(data_path, "OV_full.dat"))
+
+Cu <- Cu_sorted
+Cv <- Cv_sorted
+
+nV <- nrow(obs_A)
+nP <- ncol(obs_A)
+nS <- dim(obs_A)[3]
+```
+
+```{r cv-setup}
+Nsims <- 10      # Recommended: 500
+thin  <- 1       # Recommended: 20
+burn  <- 5       # Recommended: 10000
+n.chains <- 4
+n.folds  <- 2    # Recommended: k = 10
+
+sampling <- list(
+  L = TRUE, lambda = TRUE, tau = TRUE, beta = TRUE,
+  gamma = TRUE, sigmasq = TRUE, sigmasq_p = TRUE,
+  delta = TRUE, zeta = TRUE, U = TRUE, V = TRUE, v = TRUE,
+  z = TRUE, theta = TRUE, pis = TRUE, pjs = TRUE, rU = TRUE,
+  rV = TRUE, miss_X = TRUE, miss_W = TRUE,
+  O_V = TRUE, O_P = TRUE, p_OV = TRUE, p_OP = TRUE
+)
+
+# Identify observed interactions and assign to folds
+comb_A <- (apply(obs_A, c(1, 2), sum) > 0) * 1
+obs_pairs <- which(comb_A == 1, arr.ind = TRUE)
+set.seed(1)
+fold_ids <- sample(rep(1:n.folds, length.out = nrow(obs_pairs)))
+```
+
+```{r cv-run}
+for (kk in 1:n.folds) {
+  cat("\n\n===== Fold", kk, "=====\n")
+
+  # Mask held-out interactions
+  held_out <- obs_pairs[fold_ids == kk, , drop = FALSE]
+  use_A <- obs_A
+  for (rr in seq_len(nrow(held_out))) {
+    use_A[held_out[rr, 1], held_out[rr, 2], ] <- 0
+  }
+
+  for (cc in 1:n.chains) {
+    set.seed(cc + kk * 100)
+
+    mcmc <- MCMC(
+      use_A, focus = obs_F, p_occur_V = O_V, p_occur_P = O_P,
+      obs_X, obs_W, Cu, Cv,
+      Nsims, burn, thin, use_H = 10,
+      use_shrinkage = TRUE, bias_cor = TRUE, theta_inf = 0.01,
+      mh_n_pis = 100, mh_n_pjs = 100, mh_n_rho = 100,
+      mh_pprior_sd = 0.1, mh_p_step = 0.1,
+      stick_alpha = 5, prior_theta = c(1, 1), prior_tau = c(5, 5),
+      prior_rho = c(5, 5), prior_mu0 = 0, prior_sigmasq0 = 10,
+      prior_sigmasq = c(1, 1), start_values = NULL,
+      sampling = sampling, cut_feed = FALSE, save_logL = FALSE
+    )
+
+    all_pred <- abind::abind(pred_L = mcmc$Ls, probL = mcmc$mod_pL1s, along = 4)
+    res <- list(all_pred = all_pred, held_out = held_out)
+    save(res, file = file.path(save_path, paste0("cv_fold", kk, "_chain", cc, ".dat")))
+    rm(res)
+  }
+}
+```

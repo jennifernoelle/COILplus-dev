@@ -1,0 +1,94 @@
+---
+title: "Fitting COIL (basic model)"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Fitting COIL (basic model)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+
+This vignette fits the basic COIL model (without sampling occurrence
+probabilities) to the Afrotropical frugivory data. Run
+`vignette("01_data_prep")` first. See `vignette("02_fit_coilplus")` for
+the full COIL+ specification.
+
+A small iteration count is used here for speed. Recommended settings for a
+full analysis (Nsims = 500, burn = 10000, thin = 20) are noted in the code
+comments.
+
+```{r paths}
+library(COILplus)
+library(abind)
+
+data_path <- file.path(system.file("extdata", package = "COILplus"), "processed")
+date      <- "COIL_exp"
+save_path <- file.path(tempdir(), "COILplus_results", date)
+dir.create(save_path, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r load}
+load(file.path(data_path, "Cu_phylo_sorted.dat"))
+load(file.path(data_path, "Cv_phylo_sorted.dat"))
+load(file.path(data_path, "A_obs.dat"))
+load(file.path(data_path, "F_obs.dat"))
+load(file.path(data_path, "Obs_X_sorted.dat"))
+load(file.path(data_path, "Obs_W_sorted.dat"))
+load(file.path(data_path, "OP_full.dat"))
+load(file.path(data_path, "OV_full.dat"))
+
+Cu <- Cu_sorted
+Cv <- Cv_sorted
+```
+
+```{r specs}
+Nsims <- 10      # Recommended: 500
+thin  <- 1       # Recommended: 20
+burn  <- 5       # Recommended: 10000
+
+# COIL: do not sample occurrence probabilities
+sampling <- list(
+  L = TRUE, lambda = TRUE, tau = TRUE, beta = TRUE,
+  gamma = TRUE, sigmasq = TRUE, sigmasq_p = TRUE,
+  delta = TRUE, zeta = TRUE, U = TRUE, V = TRUE, v = TRUE,
+  z = TRUE, theta = TRUE, pis = TRUE, pjs = TRUE, rU = TRUE,
+  rV = TRUE, miss_X = TRUE, miss_W = TRUE,
+  O_V = TRUE, O_P = TRUE,
+  p_OV = FALSE, p_OP = FALSE  # fixed occurrence probabilities
+)
+```
+
+```{r fit}
+n.chains <- 4
+for (cc in 1:n.chains) {
+  set.seed(cc)
+  cat("\n Fitting chain", cc)
+
+  mcmc <- MCMC(
+    obs_A, focus = obs_F, p_occur_V = O_V, p_occur_P = O_P,
+    obs_X, obs_W, Cu, Cv,
+    Nsims, burn, thin, use_H = 10,
+    use_shrinkage = TRUE, bias_cor = TRUE, theta_inf = 0.01,
+    mh_n_pis = 100, mh_n_pjs = 100, mh_n_rho = 100,
+    mh_pprior_sd = 0.1, mh_p_step = 0.1,
+    stick_alpha = 5, prior_theta = c(1, 1), prior_tau = c(5, 5),
+    prior_rho = c(5, 5), prior_mu0 = 0, prior_sigmasq0 = 10,
+    prior_sigmasq = c(1, 1), start_values = NULL,
+    sampling = sampling, cut_feed = FALSE, save_logL = TRUE
+  )
+
+  all_pred <- abind::abind(pred_L = mcmc$Ls, probL = mcmc$mod_pL1s, along = 4)
+  res <- list(
+    all_pred = all_pred, logL = mcmc$logL,
+    correlations = cbind(U = mcmc$rU, V = mcmc$rV),
+    p_detect = list(pis = mcmc$pi_mean, pjs = mcmc$pj_mean),
+    factors  = list(U = mcmc$U_mean, V = mcmc$V_mean),
+    Xs = mcmc$Xs, Ws = mcmc$Ws
+  )
+  save(res, file = file.path(save_path, paste0("res_", date, "_", cc, ".dat")))
+  rm(res)
+}
+```
