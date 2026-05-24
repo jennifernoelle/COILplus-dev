@@ -22,23 +22,42 @@ library(foreach)
 library(doParallel)
 library(abind)
 
-# Paths to bundled raw data
-data_path <- system.file("extdata", package = "COILplus")
+base_path      <- tools::R_user_dir("COILplus", which = "data")
+raw_path       <- file.path(base_path, "raw")
+processed_path <- file.path(base_path, "processed")
 
-# Where to save processed data (set your own path for a real analysis)
-save_path <- file.path(system.file("extdata", package = "COILplus"), "processed")
-dir.create(save_path, showWarnings = FALSE)
+dir.create(raw_path,       recursive = TRUE, showWarnings = FALSE)
+dir.create(processed_path, recursive = TRUE, showWarnings = FALSE)
 
 save_files <- TRUE
 ```
 
 ## Load raw data
 
+First we download sample data from the Zenodo record: https://zenodo.org/records/20357089/
+```{r download}
+zenodo_base <- "https://zenodo.org/records/20357089/files/"
+files <- c("Cu_phylo.dat", "Cv_phylo.dat", "frug_generic.csv",
+           "Obs_W.dat", "Obs_X.dat", "p_taxa_generic.csv",
+           "v_taxa_generic.csv", "Readme.md")
+
+for (f in files) {
+  dest <- file.path(raw_path, f)
+  if (!file.exists(dest)) {
+    download.file(paste0(zenodo_base, f, "?download=1"), 
+                  destfile = dest, mode = "wb")
+  }
+}
+
+```
+
 ```{r load}
-frug <- read.csv(file.path(data_path, "frug_generic.csv"))
+frug <- read.csv(file.path(raw_path, "frug_generic.csv"))
 ```
 
 ## Part A: Exploratory summary
+
+First we explore the basic data structure and note that individual studies may contain multiple different sampling schemes (e.g., observations and separate locations), each of which is given its own unique identifier. 
 
 ```{r eda}
 apply(frug, 2, function(x) sum(is.na(x)))
@@ -66,6 +85,7 @@ nSP <- length(sp.names)
 
 ## Part B: Create the adjacency array
 
+Convert the frugivory data from long format to an adjacency array with rows corresponding to frugivore species, columns corresponding to plant species, and slices (dimension three) corresponding to sampling units. 
 ```{r adjacency}
 frug_new <- frug %>%
   dplyr::select(Animal_Species_Corrected, Plant_Species_Corrected, Study_ID, Study_ID_Plus)
@@ -161,6 +181,14 @@ for (ss in 1:nSP) {
 
 ## Part E: Create the focus array
 
+The focus array `F_obs` encodes which species pairs were "in scope" for observation in each study, based on the study's sampling method. This is necessary because different study designs have different observation biases:
+
+- **Animal-focused studies** record any interaction involving a focal animal species, so all plants are considered in scope for any animal that was observed at all.
+- **Plant-focused studies** record any interaction involving a focal plant species, so all animals are considered in scope for any plant that was observed at all.
+- **Both-limited or unknown studies** are assumed to only report interactions that were actually observed — the observed interaction matrix itself defines what was in scope.
+- **Network-wide studies** (all other methods) observed all possible animal-plant combinations, so all pairs are in scope.
+
+
 ```{r focus}
 F_obs <- array(0, dim = c(nV, nP, nSP))
 dimnames(F_obs) <- list(v.names, p.names, sp.names)
@@ -190,12 +218,12 @@ for (ss in 1:nSP) {
 ## Sort species and load traits
 
 ```{r sort}
-load(file.path(data_path, "Cu_phylo.dat"))
-load(file.path(data_path, "Cv_phylo.dat"))
-load(file.path(data_path, "Obs_X.dat"))
-load(file.path(data_path, "Obs_W.dat"))
-v.taxa <- read.csv(file.path(data_path, "v_taxa_generic.csv"))
-p.taxa <- read.csv(file.path(data_path, "p_taxa_generic.csv"))
+load(file.path(raw_path, "Cu_phylo.dat"))
+load(file.path(raw_path, "Cv_phylo.dat"))
+load(file.path(raw_path, "Obs_X.dat"))
+load(file.path(raw_path, "Obs_W.dat"))
+v.taxa <- read.csv(file.path(raw_path, "v_taxa_generic.csv"))
+p.taxa <- read.csv(file.path(raw_path, "p_taxa_generic.csv"))
 
 Cu <- Cu_phylo_generic
 Cv <- Cv_phylo_generic
@@ -224,15 +252,15 @@ obs_F <- F_obs[v_species_order, p_species_order, ]
 
 ```{r save}
 if (save_files) {
-  save(obs_A,     file = file.path(save_path, "A_obs.dat"))
-  save(O_P,       file = file.path(save_path, "OP_full.dat"))
-  save(O_V,       file = file.path(save_path, "OV_full.dat"))
-  save(obs_F,     file = file.path(save_path, "F_obs.dat"))
-  save(Cu_sorted, file = file.path(save_path, "Cu_phylo_sorted.dat"))
-  save(Cv_sorted, file = file.path(save_path, "Cv_phylo_sorted.dat"))
-  save(obs_X,     file = file.path(save_path, "Obs_X_sorted.dat"))
-  save(obs_W,     file = file.path(save_path, "Obs_W_sorted.dat"))
-  write.csv(v.taxa.sorted, file.path(save_path, "v_taxa_sorted.csv"), row.names = FALSE)
-  write.csv(p.taxa.sorted, file.path(save_path, "p_taxa_sorted.csv"), row.names = FALSE)
+  save(obs_A,     file = file.path(processed_path, "A_obs.dat"))
+  save(O_P,       file = file.path(processed_path, "OP_full.dat"))
+  save(O_V,       file = file.path(processed_path, "OV_full.dat"))
+  save(obs_F,     file = file.path(processed_path, "F_obs.dat"))
+  save(Cu_sorted, file = file.path(processed_path, "Cu_phylo_sorted.dat"))
+  save(Cv_sorted, file = file.path(processed_path, "Cv_phylo_sorted.dat"))
+  save(obs_X,     file = file.path(processed_path, "Obs_X_sorted.dat"))
+  save(obs_W,     file = file.path(processed_path, "Obs_W_sorted.dat"))
+  write.csv(v.taxa.sorted, file.path(processed_path, "v_taxa_sorted.csv"), row.names = FALSE)
+  write.csv(p.taxa.sorted, file.path(processed_path, "p_taxa_sorted.csv"), row.names = FALSE)
 }
 ```

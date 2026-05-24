@@ -8,7 +8,7 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 ```
 
 This vignette analyses in-sample and out-of-sample model performance for a
@@ -30,22 +30,24 @@ library(pROC)
 library(bayesplot)
 library(tidyverse)
 
-data_path    <- file.path(system.file("extdata", package = "COILplus"), "processed")
+base_path      <- tools::R_user_dir("COILplus", which = "data")
+raw_path       <- file.path(base_path, "raw")
+processed_path <- file.path(base_path, "processed")
 date         <- "COILp_exp"
-results_path <- file.path(tempdir(), "COILplus_results", date)
-cv_path      <- file.path(tempdir(), "COILplus_results", paste0(date, "_cv"))
+results_path <- file.path(base_path, "results", date)
+cv_path      <- file.path(base_path, "results", paste0(date, "_cv"))
 ```
 
 ```{r load}
-load(file.path(data_path, "A_obs.dat"))
-load(file.path(data_path, "F_obs.dat"))
-load(file.path(data_path, "Obs_X_sorted.dat"))
-load(file.path(data_path, "Obs_W_sorted.dat"))
-load(file.path(data_path, "OP_full.dat"))
-load(file.path(data_path, "OV_full.dat"))
+load(file.path(processed_path, "A_obs.dat"))
+load(file.path(processed_path, "F_obs.dat"))
+load(file.path(processed_path, "Obs_X_sorted.dat"))
+load(file.path(processed_path, "Obs_W_sorted.dat"))
+load(file.path(processed_path, "OP_full.dat"))
+load(file.path(processed_path, "OV_full.dat"))
 
-v.taxa <- read.csv(file.path(data_path, "v_taxa_sorted.csv"))
-p.taxa <- read.csv(file.path(data_path, "p_taxa_sorted.csv"))
+v.taxa <- read.csv(file.path(processed_path, "v_taxa_sorted.csv"))
+p.taxa <- read.csv(file.path(processed_path, "p_taxa_sorted.csv"))
 
 loadRData <- function(fileName) {
   load(fileName)
@@ -79,7 +81,7 @@ roc_obj <- pROC::roc(obs_vec, pred_vec)
 cat("In-sample AUC:", pROC::auc(roc_obj), "\n")
 ```
 
-```{r heatmap}
+```{r heatmap, fig.width=12, fig.height=8, fig.show='asis'}
 # Set observed interactions to NA so they appear black in the plot
 mean_pred_na <- mean_prob
 mean_pred_na[comb_A == 1] <- NA
@@ -113,7 +115,7 @@ superheat(X = mean_pred_na[keep_v_index, keep_p_index],
           title.size = 20)
 ```
 
-```{r out-of-sample}
+```{r out-of-sample, fig.width=12, fig.height=8, fig.show='asis'}
 # Match n.folds and n.chains used in 04_cross_validation
 n.folds  <- 2   # Recommended: 10
 n.chains <- 4
@@ -152,6 +154,6 @@ ggplot(data = plot_dta) +
   xlab('') +
   ggtitle('Out of sample performance', subtitle = date) +
   theme(legend.position = 'none') +
-  scale_y_continuous(limits = function(x) c(0.9, x[2]), n.breaks = 6) +
+  scale_y_continuous(n.breaks = 6) +
   theme(text = element_text(size = 20))
 ```

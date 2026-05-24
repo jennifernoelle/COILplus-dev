@@ -8,7 +8,7 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 ```
 
 This vignette fits the basic COIL model (without sampling occurrence
@@ -24,21 +24,23 @@ comments.
 library(COILplus)
 library(abind)
 
-data_path <- file.path(system.file("extdata", package = "COILplus"), "processed")
+base_path      <- tools::R_user_dir("COILplus", which = "data")
+raw_path       <- file.path(base_path, "raw")
+processed_path <- file.path(base_path, "processed")
 date      <- "COIL_exp"
-save_path <- file.path(tempdir(), "COILplus_results", date)
+save_path <- file.path(base_path, "results", date)
 dir.create(save_path, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ```{r load}
-load(file.path(data_path, "Cu_phylo_sorted.dat"))
-load(file.path(data_path, "Cv_phylo_sorted.dat"))
-load(file.path(data_path, "A_obs.dat"))
-load(file.path(data_path, "F_obs.dat"))
-load(file.path(data_path, "Obs_X_sorted.dat"))
-load(file.path(data_path, "Obs_W_sorted.dat"))
-load(file.path(data_path, "OP_full.dat"))
-load(file.path(data_path, "OV_full.dat"))
+load(file.path(processed_path, "Cu_phylo_sorted.dat"))
+load(file.path(processed_path, "Cv_phylo_sorted.dat"))
+load(file.path(processed_path, "A_obs.dat"))
+load(file.path(processed_path, "F_obs.dat"))
+load(file.path(processed_path, "Obs_X_sorted.dat"))
+load(file.path(processed_path, "Obs_W_sorted.dat"))
+load(file.path(processed_path, "OP_full.dat"))
+load(file.path(processed_path, "OV_full.dat"))
 
 Cu <- Cu_sorted
 Cv <- Cv_sorted
