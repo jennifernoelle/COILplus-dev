@@ -12,7 +12,7 @@ Install the development version from GitHub:
 
 ```r
 # install.packages("devtools")
-devtools::install_github("jennifernoelle/COILplus")
+devtools::install_github("jennifernoelle/COILplus-dev")
 ```
 > **Note:** Vignettes are not built by default and should not be built automatically — they include MCMC sampling and are designed to be run interactively in sequence.
 
