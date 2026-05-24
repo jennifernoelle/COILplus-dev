@@ -1,9 +1,30 @@
 # COIL+
 
-This repository implements both the **COIL** model and the extended **COIL+** model developed in XX (2025) and contains all code needed to reproduce the results from the main text. It adds support for informative occurrence priors and sampling of occurrence probabilities, together with major efficiency improvements to the [BiasedNetwork](https://github.com/gpapadog/BiasedNetwork) package (Papadogeorgou, 2023).
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20368146.svg)](https://doi.org/10.5281/zenodo.20368146)
+
+This repository implements both the **COIL** model and the extended **COIL+** model developed in Kampe et. al. (2026). This package adds support for informative occurrence priors and sampling of occurrence probabilities, together with additional trait matching functions, and major efficiency improvements to the [BiasedNetwork](https://github.com/gpapadog/BiasedNetwork) package (Papadogeorgou, 2023).. 
 
 The included code provides an illustrative example, imputing unobserved frugivore-plant interactions from a multi-study data set of Afrotropical frugivory. The data are provided with generic species labels for plants and frugivores in compliance with data sharing restrictions.
 
+## Installation
+
+Install the development version from GitHub:
+
+```r
+# install.packages("devtools")
+devtools::install_github("jennifernoelle/COILplus")
+```
+> **Note:** Vignettes are not built by default and should not be built automatically — they include MCMC sampling and are designed to be run interactively in sequence.
+
+### Running the vignettes
+
+To work through the full modelling workflow:
+
+1. Clone the repository to your local machine
+2. Open the project in RStudio
+3. Navigate to the `vignettes/` folder
+4. Run the vignettes **in order** (01 through 06), knitting each one interactively
+5. Data are downloaded automatically from Zenodo ([DOI: 10.5281/zenodo.20357089](https://doi.org/10.5281/zenodo.20357089)) on first run of vignette 01directly in RStudio. Data are downloaded automatically from Zenodo ([DOI: 10.5281/zenodo.20357089](https://doi.org/10.5281/zenodo.20357089)) on first run.
 ## Data set
 
 The key raw data sources are are in the folder `RawData/`:
